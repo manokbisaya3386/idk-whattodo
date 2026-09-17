@@ -1,0 +1,575 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Floating Share & Inbox</title>
+<style>
+
+  :root {
+    --color-ink: #1c1b22;        /* main text color */
+    --color-paper: #f6f4ef;      /* page background */
+    --color-line: #dcd8cd;       /* faint lines */
+    --color-pink: #ff5f96;       /* main pink */
+    --color-pink-dark: #e0447d;  /* darker pink */
+  }
+
+  * {
+    box-sizing: border-box;
+  }
+
+  body {
+    margin: 0;
+    font-family: 'Georgia', serif;
+    background: var(--color-paper);
+    color: var(--color-ink);
+  }
+
+  .page {
+    max-width: 600px;
+    margin: 0 auto;
+    padding: 80px 24px 200px;
+    text-align: center;
+  }
+
+  .page img {
+    max-width: 320px;
+    width: 100%;
+    height: auto;
+    /* stop people from dragging or long-pressing the image */
+    user-select: none;
+    -webkit-user-drag: none;
+    -webkit-touch-callout: none;
+    pointer-events: none;
+  }
+
+  .fab-row {
+    position: fixed;
+    right: 26px;
+    bottom: 26px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+  }
+
+  .fab {
+    border: none;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+  }
+
+  .fab:active {
+    transform: translateY(2px);
+  }
+
+  /* the big pink "open letter" button */
+  .fab-inbox {
+    width: 60px;
+    height: 60px;
+    color: #fff;
+    background: linear-gradient(160deg, #ff85b3, var(--color-pink) 55%, var(--color-pink-dark));
+    box-shadow:
+      inset 0 2px 3px rgba(255, 255, 255, 0.55),
+      inset 0 -6px 8px rgba(155, 30, 78, 0.45),
+      0 6px 0 var(--color-pink-dark),
+      0 14px 22px rgba(224, 68, 125, 0.45);
+    animation: bounce 1.6s ease-in-out infinite;
+  }
+
+  .fab-inbox svg {
+    width: 24px;
+    height: 24px;
+  }
+
+  /* the small white "share" button */
+  .fab-share {
+    width: 30px;
+    height: 30px;
+    align-self: flex-end;
+    margin-bottom: 4px;
+    background: linear-gradient(160deg, #fff, #fdeef3);
+    color: var(--color-pink-dark);
+    border: 2px solid var(--color-pink);
+    box-shadow:
+      inset 0 1px 2px rgba(255, 255, 255, 0.9),
+      0 3px 0 var(--color-pink),
+      0 8px 14px rgba(255, 95, 150, 0.35);
+  }
+
+  .fab-share svg {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* little up-and-down bounce for the inbox button */
+  @keyframes bounce {
+    0%, 100% { transform: translateY(0); }
+    30%      { transform: translateY(-10px); }
+    50%      { transform: translateY(0); }
+    65%      { transform: translateY(-4px); }
+    80%      { transform: translateY(0); }
+  }
+
+  /* the little "1" badge on the inbox button */
+  .badge {
+    position: absolute;
+    top: -4px;
+    right: -4px;
+    min-width: 20px;
+    height: 20px;
+    padding: 0 5px;
+    border-radius: 999px;
+    background: var(--color-ink);
+    color: var(--color-paper);
+    font: 700 11px sans-serif;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border: 2px solid var(--color-paper);
+  }
+  .fab-inbox {
+    position: relative; /* so the badge can sit on top of it */
+  }
+
+  .overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(28, 27, 34, 0);
+    z-index: 50;
+    display: none;
+  }
+
+  .overlay.is-visible {
+    display: block;
+    background: rgba(28, 27, 34, 0.35);
+  }
+
+  .share-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 320px;
+    max-width: calc(100vw - 48px);
+    background: #fffaf3;
+    border-radius: 24px;
+    z-index: 65;
+    padding: 28px 24px 24px;
+    box-shadow: 0 30px 60px rgba(28, 27, 34, 0.35);
+
+    /* hidden by default */
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0.9);
+    transition: 0.18s cubic-bezier(0.2, 1.4, 0.4, 1);
+  }
+
+  .share-popup.is-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .share-popup h2 {
+    margin: 0 0 20px;
+    text-align: center;
+    font: 800 20px sans-serif;
+    color: var(--color-pink-dark);
+  }
+
+  /* the little X close button used in both popups */
+  .close-button {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    width: 26px;
+    height: 26px;
+    border: none;
+    border-radius: 50%;
+    background: none;
+    color: #8a8578;
+    font-size: 16px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .close-button:hover {
+    background: #eae7df;
+    color: var(--color-ink);
+  }
+
+  /* rounded pill-shaped buttons inside the share popup */
+  .pill-button {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 18px;
+    border-radius: 999px;
+    font: 700 15px sans-serif;
+    cursor: pointer;
+    margin-bottom: 14px;
+  }
+
+  .pill-button:last-child {
+    margin-bottom: 0;
+  }
+
+  .pill-button.is-primary {
+    border: none;
+    color: #fff;
+    background: linear-gradient(160deg, #ff85b3, var(--color-pink) 55%, var(--color-pink-dark));
+    box-shadow:
+      inset 0 2px 3px rgba(255, 255, 255, 0.5),
+      0 8px 16px rgba(224, 68, 125, 0.4);
+  }
+
+  .pill-button.is-secondary {
+    border: 2px solid #ffd3e2;
+    color: var(--color-pink-dark);
+    background: #fff;
+  }
+
+  .pill-button svg {
+    width: 18px;
+    height: 18px;
+  }
+
+  .letter-popup {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    width: 380px;
+    max-width: calc(100vw - 48px);
+    max-height: 78vh;
+    border-radius: 8px;
+    z-index: 70;
+    display: flex;
+    flex-direction: column;
+    overflow: visible;
+    box-shadow: 0 30px 60px rgba(28, 27, 34, 0.35);
+
+    /* hidden by default */
+    opacity: 0;
+    pointer-events: none;
+    transform: translate(-50%, -50%) scale(0.6);
+    transition: 0.22s cubic-bezier(0.2, 1.4, 0.4, 1);
+  }
+
+  .letter-popup.is-open {
+    opacity: 1;
+    pointer-events: auto;
+    transform: translate(-50%, -50%) scale(1);
+  }
+
+  .letter-card {
+    position: relative;
+    border-radius: 8px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    /* lined-paper effect */
+    background:
+      repeating-linear-gradient(#fffdf7, #fffdf7 27px, var(--color-line) 28px),
+      #fffdf7;
+  }
+
+  .letter-from {
+    font: 700 12px sans-serif;
+    color: var(--color-pink-dark);
+    padding: 20px 26px 0;
+    display: block;
+  }
+
+  .letter-body {
+    padding: 10px 26px 22px;
+    overflow-y: auto;
+    font-size: 16px;
+    line-height: 28px;
+    white-space: pre-line;
+  }
+
+  .letter-signoff {
+    margin-top: 0;
+    font-style: italic;
+  }
+
+  /* decorative corner images on the letter */
+  .corner-image {
+    position: absolute;
+    width: 64px;
+    height: auto;
+    pointer-events: none;
+    user-select: none;
+    -webkit-user-drag: none;
+    z-index: -1;
+  }
+
+  .corner-image.top {
+    top: -26px;
+    left: -18px;
+  }
+
+  .corner-image.bottom {
+    bottom: -26px;
+    left: -18px;
+  }
+
+</style>
+</head>
+<body>
+
+  <!-- Main page content -->
+  <div class="page">
+    <img src="cat.jpg" alt="Cartoon cat holding a bouquet of flowers" draggable="false">
+  </div>
+
+  <!-- Dark background shown behind popups -->
+  <div class="overlay" id="overlay"></div>
+
+  <!-- "Share your letter" popup -->
+  <div class="share-popup" id="sharePopup">
+    <button type="button" class="close-button" id="closeShareButton">✕</button>
+    <h2>Share your letter</h2>
+
+    <button type="button" class="pill-button is-primary" id="copyLinkButton">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="9" y="9" width="13" height="13" rx="2"/>
+        <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+      </svg>
+      <span id="copyLinkLabel">Copy Link</span>
+    </button>
+
+    <button type="button" class="pill-button is-secondary" id="downloadQrButton">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="3" y="3" width="7" height="7"/>
+        <rect x="14" y="3" width="7" height="7"/>
+        <rect x="3" y="14" width="7" height="7"/>
+        <line x1="14" y1="14" x2="14" y2="21"/>
+        <line x1="21" y1="14" x2="21" y2="21"/>
+        <line x1="14" y1="17.5" x2="21" y2="17.5"/>
+      </svg>
+      Download QR Code
+    </button>
+  </div>
+
+  <!-- The letter popup -->
+  <div class="letter-popup" id="letterPopup">
+    <img class="corner-image top" src="corner-top-left.jpg" alt="">
+    <img class="corner-image bottom" src="corner-bottom-left.jpg" alt="">
+
+    <div class="letter-card">
+      <button type="button" class="close-button" id="closeLetterButton">✕</button>
+      <span class="letter-from">Jep</span>
+      <div class="letter-body">Hi Dianne,
+
+Just want to let you know that I really like you. I love how you handle things at school and how patient you are with everyone. I also really like how smart, kind and pretty you are. I really want to get to know you better, if you'll let me. I know you might not feel the same way, and that's okay. I just wanted to be honest about my feelings. 
+
+No worries if you don't feel the same way. I'd still draw for you lol :p. I really really really appreciate your compliments on my drawings. Thankiees<div class="letter-signoff">— Jep</div></div>
+    </div>
+  </div>
+
+  <!-- Floating buttons -->
+  <div class="fab-row">
+    <button class="fab fab-share" id="shareButton" type="button" aria-label="Share this page">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="18" cy="5" r="3"/>
+        <circle cx="6" cy="12" r="3"/>
+        <circle cx="18" cy="19" r="3"/>
+        <line x1="8.59" y1="10.51" x2="15.42" y2="6.49"/>
+        <line x1="8.59" y1="13.49" x2="15.42" y2="17.51"/>
+      </svg>
+    </button>
+
+    <button class="fab fab-inbox" id="inboxButton" type="button" aria-label="Open letter">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <rect x="2" y="4" width="20" height="16" rx="2"/>
+        <path d="m22 7-10 6L2 7"/>
+      </svg>
+      <span class="badge">1</span>
+    </button>
+  </div>
+
+  <!-- Library used to generate the QR code -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
+  <script>
+
+    const shareButton = document.getElementById('shareButton');
+    const inboxButton = document.getElementById('inboxButton');
+    const sharePopup = document.getElementById('sharePopup');
+    const letterPopup = document.getElementById('letterPopup');
+    const overlay = document.getElementById('overlay');
+
+    const copyLinkButton = document.getElementById('copyLinkButton');
+    const copyLinkLabel = document.getElementById('copyLinkLabel');
+    const downloadQrButton = document.getElementById('downloadQrButton');
+    const closeShareButton = document.getElementById('closeShareButton');
+    const closeLetterButton = document.getElementById('closeLetterButton');
+
+
+    // If this page is opened as a local file, there's no real web address,
+    // so we just fake one for testing.
+    function getShareUrl() {
+      if (location.protocol === 'file:') {
+        const fileName = location.pathname.split('/').pop();
+        return 'https://example.com/' + fileName;
+      }
+      return location.href;
+    }
+
+
+    function copyLink() {
+      const url = getShareUrl();
+
+      function showCopiedMessage() {
+        copyLinkLabel.textContent = 'Copied!';
+        setTimeout(() => {
+          copyLinkLabel.textContent = 'Copy Link';
+        }, 1500);
+      }
+
+      // Modern browsers can copy text directly
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(url)
+          .then(showCopiedMessage)
+          .catch(() => copyLinkOldWay(url, showCopiedMessage));
+      } else {
+        copyLinkOldWay(url, showCopiedMessage);
+      }
+    }
+
+    // Backup copy method for older browsers
+    function copyLinkOldWay(text, onSuccess) {
+      const textBox = document.createElement('textarea');
+      textBox.value = text;
+      textBox.style.position = 'fixed';
+      textBox.style.opacity = '0';
+      document.body.appendChild(textBox);
+      textBox.select();
+
+      try {
+        document.execCommand('copy');
+        onSuccess();
+      } catch (error) {
+        // clipboard not available, do nothing
+      }
+
+      document.body.removeChild(textBox);
+    }
+
+
+    function downloadQrCode() {
+      if (typeof QRCode === 'undefined') {
+        alert("The QR code library didn't load. Check your internet connection and try again.");
+        return;
+      }
+
+      // Create the QR code (with high error correction so we can add a label)
+      const tempContainer = document.createElement('div');
+      new QRCode(tempContainer, {
+        text: getShareUrl(),
+        width: 512,
+        height: 512,
+        colorDark: '#ff5f96',
+        colorLight: '#ffffff',
+        correctLevel: QRCode.CorrectLevel.H
+      });
+
+      const qrCanvas = tempContainer.querySelector('canvas');
+      if (!qrCanvas) return;
+
+      // Draw the QR code onto a taller canvas so we can add a "Scan Me!" label
+      const labelHeight = 64;
+      const finalCanvas = document.createElement('canvas');
+      finalCanvas.width = qrCanvas.width;
+      finalCanvas.height = qrCanvas.height + labelHeight;
+
+      const context = finalCanvas.getContext('2d');
+      context.fillStyle = '#ffffff';
+      context.fillRect(0, 0, finalCanvas.width, finalCanvas.height);
+      context.drawImage(qrCanvas, 0, 0);
+
+      context.font = `700 ${labelHeight * 0.5}px sans-serif`;
+      context.textAlign = 'center';
+      context.textBaseline = 'middle';
+      context.fillStyle = '#ff5f96';
+      context.fillText('Scan Me!', finalCanvas.width / 2, qrCanvas.height + labelHeight / 2);
+
+      // Turn the canvas into a downloadable PNG file
+      finalCanvas.toBlob(function (blob) {
+        if (!blob) return;
+
+        const downloadUrl = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.download = 'qr-code.png';
+        link.href = downloadUrl;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(() => URL.revokeObjectURL(downloadUrl), 1000);
+      }, 'image/png');
+    }
+
+
+    function closeAllPopups() {
+      sharePopup.classList.remove('is-open');
+      letterPopup.classList.remove('is-open');
+      overlay.classList.remove('is-visible');
+    }
+
+    function toggleSharePopup(event) {
+      event.stopPropagation();
+      const wasOpen = sharePopup.classList.contains('is-open');
+      closeAllPopups();
+      if (!wasOpen) {
+        sharePopup.classList.add('is-open');
+        overlay.classList.add('is-visible');
+      }
+    }
+
+    function toggleLetterPopup(event) {
+      event.stopPropagation();
+      const wasOpen = letterPopup.classList.contains('is-open');
+      closeAllPopups();
+      if (!wasOpen) {
+        letterPopup.classList.add('is-open');
+        overlay.classList.add('is-visible');
+      }
+    }
+
+
+    shareButton.addEventListener('click', toggleSharePopup);
+    inboxButton.addEventListener('click', toggleLetterPopup);
+
+    copyLinkButton.addEventListener('click', function (event) {
+      event.stopPropagation();
+      copyLink();
+    });
+
+    downloadQrButton.addEventListener('click', function (event) {
+      event.stopPropagation();
+      downloadQrCode();
+    });
+
+    closeShareButton.addEventListener('click', closeAllPopups);
+    closeLetterButton.addEventListener('click', closeAllPopups);
+    overlay.addEventListener('click', closeAllPopups);
+
+    document.addEventListener('keydown', function (event) {
+      if (event.key === 'Escape') {
+        closeAllPopups();
+      }
+    });
+
+  </script>
+
+</body>
+</html>
